@@ -1,0 +1,6 @@
+.build/
+kolla-ansible/
+venv/
+**/**.iso
+all-in-one
+multinode

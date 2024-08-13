@@ -1,0 +1,48 @@
+supervisor:
+  enabled: true
+  address: 10.253.24.4
+  file_server:
+    port: 8080
+    http_dir: /var/www
+    tftp_dir: /srv/tftp
+  webhook:
+    port: 9000
+    dir: /var/webhook
+    whitelist: true
+  machines:
+    - hostname: cpu012
+      bond_address: 10.253.1.10
+      pxe_mac_addresses:
+        # - d4:f5:ef:50:96:f2
+        - d4:f5:ef:50:96:f3
+      config:
+        docker: true
+    - hostname: cpu013
+      bond_address: 10.253.1.11
+      pxe_mac_addresses:
+        # - d4:f5:ef:50:99:12
+        - d4:f5:ef:50:99:13
+      config:
+        docker: true
+    - hostname: gpu003
+      bond_address: 10.253.1.12
+      pxe_mac_addresses:
+        # - d4:f5:ef:50:cc:ba
+        - d4:f5:ef:50:cc:bb
+      config:
+        docker: true
+  kolla_ansible:
+    control:
+      - cpu012
+    network:
+      - cpu013
+    compute:
+      - gpu003
+    monitoring:
+      - cpu013
+    storage:
+      - cpu013
+
+bond_address: 10.253.1.9
+packages: []
+hostname: cpu011

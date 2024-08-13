@@ -1,0 +1,272 @@
+#cloud-config
+autoinstall:
+  version: 1
+  keyboard:
+    layout: fr
+  source:
+    id: ubuntu-server
+  network:
+    ethernets:
+      eno5:
+        dhcp4: false
+      eno6:
+        dhcp4: false
+      eno7:
+        dhcp4: false
+      {%- if (supervisor and supervisor.enabled) %}
+        addresses:
+        - {{ supervisor.address }}/22
+        nameservers:
+          addresses:
+            - 140.110.16.1
+        routes:
+          - to: 10.253.24.0/22
+            via: 10.253.27.254
+      {%- endif %}
+      eno8:
+        dhcp4: false
+      ens3f0np0:
+        dhcp4: false
+      ens3f1np1:
+        dhcp4: false
+      ens4f0np0:
+        dhcp4: false
+      ens4f1np1:
+        dhcp4: false
+      ens6f0np0:
+        dhcp4: false
+      ens6f1np1:
+        dhcp4: false
+    bonds:
+      bond0:
+        interfaces:
+          - ens3f0np0
+          - ens3f1np1
+        parameters:
+          mode: 802.3ad
+    vlans:
+      vlan4000:
+        id: 4000
+        link: bond0
+        addresses:
+          - {{ bond_address }}/22
+        nameservers:
+          addresses:
+            - 140.110.16.1
+        routes:
+          - to: default
+            via: 10.253.3.254
+    version: 2
+  ssh:
+    install-server: true
+    allow-pw: false
+  shutdown: reboot
+  user-data:
+    package_reboot_if_required: true
+    package_update: true
+    package_upgrade: true
+    {%- if (packages or (supervisor and supervisor.enabled) or (config and config.docker)) %}
+    packages:
+    {%- if (supervisor and supervisor.enabled) %}
+      - dnsmasq
+      - python3-dev
+      - libffi-dev gcc
+      - libssl-dev
+      - python3-venv
+    {%- endif %}
+    {%- if (config and config.docker) %}
+      - ca-certificates
+      - curl
+    {%- endif %}
+    {%- for package in packages %}
+      - {{ package }}
+    {%- endfor %}
+    {%- endif %}
+
+    ssh_pwauth: false
+
+    # A set of users which may be applied and/or used by various modules
+    # when a 'default' entry is found it will reference the 'default_user'
+    # from the distro configuration specified below
+    users:
+      - name: spierrot
+        gecos: Sylvain Pierrot
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        groups: users,admin
+        lock_passwd: false
+        ssh_authorized_keys:
+          - "{{ getenv("SSH_PUBLIC_KEY") }}"
+        shell: /bin/bash
+
+    # If this is set, 'root' will not be able to ssh in and they
+    # will get a message to login instead as the default $user
+    disable_root: true
+
+    # This will cause the set+update hostname module to not operate (if true)
+    preserve_hostname: false
+    hostname: {{ hostname }}
+
+    {%- if (supervisor and supervisor.enabled) %}
+    write_files:
+    - path: {{ supervisor.file_server.tftp_dir }}/grub/grub.cfg
+      content: |
+        set default="0"
+        set timeout="0"
+
+        if loadfont unicode ; then
+                set gfxmode=auto
+                set locale_dir=$prefix/locale
+                set lang=en_US
+        fi
+        terminal_output gfxterm
+
+        set menu_color_normal=white/black
+        set menu_color_highlight=black/light-gray
+        if background_color 44,0,30; then
+                clear
+        fi
+
+        function gfxmode {
+                set gfxpayload="${1}"
+                if [ "${1}" = "keep" ]; then
+                        set vt_handoff=vt.handoff=7
+                else
+                        set vt_handoff=
+                fi
+        }
+
+        set linux_gfx_mode=keep
+        export linux_gfx_mode
+
+        menuentry "Try or Install Ubuntu Server" {
+                gfxmode $linux_gfx_mode
+                linux   vmlinuz ip=dhcp url=http://{{ supervisor.address }}:{{ supervisor.file_server.port }}/ubuntu-22.04.4-live-server-amd64.iso autoinstall ds=nocloud\;s=http://{{ supervisor.address }}:{{ supervisor.file_server.port }}/${net_default_mac}/ cloud-config-url=/dev/null  ---
+                initrd  initrd
+        }
+    - path: /etc/dnsmasq.d/pxe.conf
+      content: |
+        interface=eno7,lo
+        bind-interfaces
+        dhcp-range=eno7,10.253.27.100,10.253.27.200
+        dhcp-boot=bootx64.efi
+        enable-tftp
+        tftp-root={{ supervisor.file_server.tftp_dir }}
+    - path: /var/scripts/kolla.sh
+      content: |
+        #!/bin/bash
+        
+        echo "Kolla is ready..."
+      permissions: '0755'
+    - path: {{ supervisor.webhook.dir }}/hooks.json
+      content: |
+        [
+          {
+            "id": "trigger-kolla-ansible",
+            "execute-command": "/var/scripts/kolla.sh",
+            "command-working-directory": "{{ supervisor.webhook.dir }}",
+            "trigger-rule":
+            {
+              "or":
+              [
+                {%- for machine in supervisor.machines %}
+                { "match": { "type": "ip-whitelist", "ip-range": "{{ machine.bond_address }}/32" } }{% if not loop.last %},{% endif %}
+                {%- endfor %}
+              ]
+            }
+          }
+        ]
+    - path: /run/scripts/setup-files.sh
+      content: |
+        #!/bin/bash
+
+        MOUNT_POINT="/cdrom"
+        TFTP_DIR="{{ supervisor.file_server.tftp_dir }}"
+        HTTP_DIR="{{ supervisor.file_server.http_dir }}"
+
+        cleanup() {
+          umount "$MOUNT_POINT" || true
+        }
+        trap cleanup EXIT
+
+        cd /tmp
+        mkdir -p $TFTP_DIR
+
+        # tftp server
+        apt-get -y download shim.signed grub-efi-amd64-signed grub-common
+        dpkg-deb --fsys-tarfile shim-signed*deb | tar x ./usr/lib/shim/shimx64.efi.signed.latest -O > $TFTP_DIR/bootx64.efi
+        dpkg-deb --fsys-tarfile grub-efi-amd64-signed*deb | tar x ./usr/lib/grub/x86_64-efi-signed/grubnetx64.efi.signed -O > $TFTP_DIR/grubx64.efi
+        dpkg-deb --fsys-tarfile grub-common*deb | tar x ./usr/share/grub/unicode.pf2 -O > $TFTP_DIR/unicode.pf2
+
+        # http server
+        wget -c -P $HTTP_DIR/ https://releases.ubuntu.com/jammy/ubuntu-22.04.4-live-server-amd64.iso
+        mount -o loop $HTTP_DIR/ubuntu-22.04.4-live-server-amd64.iso $MOUNT_POINT
+        cp -rvf $MOUNT_POINT/casper/initrd $TFTP_DIR
+        cp -rvf $MOUNT_POINT/casper/vmlinuz $TFTP_DIR
+
+        # webhook
+        wget -qO- https://github.com/adnanh/webhook/releases/download/2.8.1/webhook-linux-amd64.tar.gz | tar -zxvf - -C /usr/local/bin/ --strip-components=1 webhook-linux-amd64/webhook
+      permissions: '0755'
+    {%- for machine in supervisor.machines %}
+    - path: {{ supervisor.file_server.http_dir }}/{{ machine.pxe_mac_addresses[0] }}/user-data
+      content: |
+        {{ include_sub_template("templates/cloud-config.yml.j2", machine) | indent(8) }}
+    - path: {{ supervisor.file_server.http_dir }}/{{ machine.pxe_mac_addresses[0] }}/meta-data
+    {%- endfor %}
+    {%- endif %}
+    
+    {%- if ((supervisor and supervisor.enabled) or (config and config.docker)) %}
+    runcmd:
+    {%- if (config and config.docker) %}
+    - install -m 0755 -d /etc/apt/keyrings
+    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    - chmod a+r /etc/apt/keyrings/docker.asc
+    - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    - apt-get update
+    - apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    {%- endif %}
+    {%- if (supervisor and supervisor.enabled) %}
+    - sh /run/scripts/setup-files.sh
+    - systemctl restart dnsmasq.service
+    - python3 -m http.server -d {{ supervisor.file_server.http_dir }}/ {{ supervisor.file_server.port }} &> /var/log/file_server.log &
+    - webhook -hooks {{ supervisor.webhook.dir }}/hooks.json -logfile /var/log/webhook.log -port {{ supervisor.webhook.port }} &
+    {%- endif %}
+    {%- endif %}
+
+    final_message: |
+      ███╗   ███╗███████╗████████╗ █████╗ ██╗     ██████╗ ███████╗████████╗ █████╗  ██████╗██╗  ██╗
+      ████╗ ████║██╔════╝╚══██╔══╝██╔══██╗██║     ╚════██╗██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
+      ██╔████╔██║█████╗     ██║   ███████║██║      █████╔╝███████╗   ██║   ███████║██║     █████╔╝ 
+      ██║╚██╔╝██║██╔══╝     ██║   ██╔══██║██║     ██╔═══╝ ╚════██║   ██║   ██╔══██║██║     ██╔═██╗ 
+      ██║ ╚═╝ ██║███████╗   ██║   ██║  ██║███████╗███████╗███████║   ██║   ██║  ██║╚██████╗██║  ██╗
+      ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
+
+    # The modules that run in the 'init' stage
+    cloud_init_modules:
+      - bootcmd
+      - write_files
+      - set_hostname
+      - update_hostname
+      - update_etc_hosts
+      - users_groups
+      - ssh
+
+    # The modules that run in the 'config' stage
+    cloud_config_modules:
+      - ubuntu_autoinstall
+      - ssh_import_id
+      - keyboard
+      - locale
+      - set_passwords
+      - apt_configure
+      - runcmd
+
+    # The modules that run in the 'final' stage
+    cloud_final_modules:
+      - package_update_upgrade_install
+      - scripts_per_once
+      - scripts_per_boot
+      - scripts_per_instance
+      - scripts_user
+      - ssh_authkey_fingerprints
+      - final_message
+      - power_state_change
