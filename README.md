@@ -35,12 +35,7 @@ pip3 install Jinja2
 
 ## Getting started
 
-```bash
-just create-ubuntu-autoinstall-iso <ISO_FILE> <VALUES_FILE>
-
-export SSH_PUBLIC_KEY=<sshkey>
-just j2 templates/cloud-config.yml.j2 values.d/cpu011.yaml
-```
+> TODO!
 
 ## Troubleshooting 
 

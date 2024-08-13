@@ -1,0 +1,129 @@
+#cloud-config
+autoinstall:
+  version: 1
+  keyboard:
+    layout: fr
+  source:
+    id: ubuntu-server
+  network:
+    ethernets:
+      eno5:
+        dhcp4: false
+      eno6:
+        dhcp4: false
+      eno7:
+        dhcp4: false
+      eno8:
+        dhcp4: false
+      ens3f0np0:
+        dhcp4: false
+      ens3f1np1:
+        dhcp4: false
+      ens4f0np0:
+        dhcp4: false
+      ens4f1np1:
+        dhcp4: false
+      ens6f0np0:
+        dhcp4: false
+      ens6f1np1:
+        dhcp4: false
+    bonds:
+      bond0:
+        interfaces:
+          - ens3f0np0
+          - ens3f1np1
+        parameters:
+          mode: 802.3ad
+    vlans:
+      vlan4000:
+        id: 4000
+        link: bond0
+        addresses:
+          - {{ bond_address }}/22
+        nameservers:
+          addresses:
+            - 140.110.16.1
+        routes:
+          - to: default
+            via: 10.253.3.254
+    version: 2
+  ssh:
+    install-server: true
+    allow-pw: false
+  shutdown: reboot
+  user-data:
+    package_reboot_if_required: true
+    package_update: true
+    package_upgrade: true
+    packages:
+      - ca-certificates
+      - curl
+
+    ssh_pwauth: false
+
+    # A set of users which may be applied and/or used by various modules
+    # when a 'default' entry is found it will reference the 'default_user'
+    # from the distro configuration specified below
+    users:
+      - name: metal2stack
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        groups: users,admin
+        lock_passwd: false
+        ssh_authorized_keys:
+          - "{{ getenv("SSH_PUBLIC_KEY") }}"
+        shell: /bin/bash
+
+    # If this is set, 'root' will not be able to ssh in and they
+    # will get a message to login instead as the default $user
+    disable_root: true
+
+    # This will cause the set+update hostname module to not operate (if true)
+    preserve_hostname: false
+    hostname: {{ hostname }}
+
+    runcmd:
+    - install -m 0755 -d /etc/apt/keyrings
+    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    - chmod a+r /etc/apt/keyrings/docker.asc
+    - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    - apt-get update
+    - apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+    final_message: |
+      ███╗   ███╗███████╗████████╗ █████╗ ██╗     ██████╗ ███████╗████████╗ █████╗  ██████╗██╗  ██╗
+      ████╗ ████║██╔════╝╚══██╔══╝██╔══██╗██║     ╚════██╗██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
+      ██╔████╔██║█████╗     ██║   ███████║██║      █████╔╝███████╗   ██║   ███████║██║     █████╔╝ 
+      ██║╚██╔╝██║██╔══╝     ██║   ██╔══██║██║     ██╔═══╝ ╚════██║   ██║   ██╔══██║██║     ██╔═██╗ 
+      ██║ ╚═╝ ██║███████╗   ██║   ██║  ██║███████╗███████╗███████║   ██║   ██║  ██║╚██████╗██║  ██╗
+      ╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
+
+    # The modules that run in the 'init' stage
+    cloud_init_modules:
+      - bootcmd
+      - write_files
+      - set_hostname
+      - update_hostname
+      - update_etc_hosts
+      - users_groups
+      - ssh
+
+    # The modules that run in the 'config' stage
+    cloud_config_modules:
+      - ubuntu_autoinstall
+      - ssh_import_id
+      - keyboard
+      - locale
+      - set_passwords
+      - apt_configure
+      - runcmd
+
+    # The modules that run in the 'final' stage
+    cloud_final_modules:
+      - package_update_upgrade_install
+      - scripts_per_once
+      - scripts_per_boot
+      - scripts_per_instance
+      - scripts_user
+      - ssh_authkey_fingerprints
+      - final_message
+      - power_state_change

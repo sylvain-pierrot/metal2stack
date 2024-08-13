@@ -1,0 +1,36 @@
+hostname: cpu011
+addresses:
+  pxe: 10.253.24.4
+  bond: 10.253.1.9
+
+# List of additional packages to be installed on the supervisor node.
+packages: []
+
+# Configuration of the file server responsible for the
+# Preboot eXecution Environment (PXE) linked to the automated
+# operating system installation process for each node.
+file_server:
+  port: 8080
+  http_dir: /var/www
+  tftp_dir: /srv/tftp
+
+# Webhook configuration for signaling readiness from each node
+# once its OS installation and initial setup are complete.
+webhook:
+  port: 9000
+  dir: /var/webhook
+  whitelist: true
+
+# Roles assigned to each node as referenced in the `nodes.yaml` file.
+# These roles define the function of each node within the OpenStack cluster.
+nodes_roles:
+  control:
+    - cpu012
+  network:
+    - cpu013
+  compute:
+    - gpu003
+  monitoring:
+    - cpu013
+  storage:
+    - cpu013

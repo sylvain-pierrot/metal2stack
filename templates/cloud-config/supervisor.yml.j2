@@ -13,16 +13,14 @@ autoinstall:
         dhcp4: false
       eno7:
         dhcp4: false
-      {%- if (supervisor and supervisor.enabled) %}
         addresses:
-        - {{ supervisor.address }}/22
+        - {{ addresses.pxe }}/22
         nameservers:
           addresses:
             - 140.110.16.1
         routes:
           - to: 10.253.24.0/22
             via: 10.253.27.254
-      {%- endif %}
       eno8:
         dhcp4: false
       ens3f0np0:
@@ -49,7 +47,7 @@ autoinstall:
         id: 4000
         link: bond0
         addresses:
-          - {{ bond_address }}/22
+          - {{ addresses.bond }}/22
         nameservers:
           addresses:
             - 140.110.16.1
@@ -65,23 +63,15 @@ autoinstall:
     package_reboot_if_required: true
     package_update: true
     package_upgrade: true
-    {%- if (packages or (supervisor and supervisor.enabled) or (config and config.docker)) %}
     packages:
-    {%- if (supervisor and supervisor.enabled) %}
       - dnsmasq
       - python3-dev
       - libffi-dev gcc
       - libssl-dev
       - python3-venv
-    {%- endif %}
-    {%- if (config and config.docker) %}
-      - ca-certificates
-      - curl
-    {%- endif %}
     {%- for package in packages %}
       - {{ package }}
     {%- endfor %}
-    {%- endif %}
 
     ssh_pwauth: false
 
@@ -89,8 +79,7 @@ autoinstall:
     # when a 'default' entry is found it will reference the 'default_user'
     # from the distro configuration specified below
     users:
-      - name: spierrot
-        gecos: Sylvain Pierrot
+      - name: metal2stack
         sudo: ALL=(ALL) NOPASSWD:ALL
         groups: users,admin
         lock_passwd: false
@@ -106,9 +95,8 @@ autoinstall:
     preserve_hostname: false
     hostname: {{ hostname }}
 
-    {%- if (supervisor and supervisor.enabled) %}
     write_files:
-    - path: {{ supervisor.file_server.tftp_dir }}/grub/grub.cfg
+    - path: {{ file_server.tftp_dir }}/grub/grub.cfg
       content: |
         set default="0"
         set timeout="0"
@@ -140,7 +128,7 @@ autoinstall:
 
         menuentry "Try or Install Ubuntu Server" {
                 gfxmode $linux_gfx_mode
-                linux   vmlinuz ip=dhcp url=http://{{ supervisor.address }}:{{ supervisor.file_server.port }}/ubuntu-22.04.4-live-server-amd64.iso autoinstall ds=nocloud\;s=http://{{ supervisor.address }}:{{ supervisor.file_server.port }}/${net_default_mac}/ cloud-config-url=/dev/null  ---
+                linux   vmlinuz ip=dhcp url=http://{{ addresses.pxe }}:{{ file_server.port }}/ubuntu-22.04.4-live-server-amd64.iso autoinstall ds=nocloud\;s=http://{{ addresses.pxe }}:{{ file_server.port }}/${net_default_mac}/ cloud-config-url=/dev/null  ---
                 initrd  initrd
         }
     - path: /etc/dnsmasq.d/pxe.conf
@@ -150,25 +138,25 @@ autoinstall:
         dhcp-range=eno7,10.253.27.100,10.253.27.200
         dhcp-boot=bootx64.efi
         enable-tftp
-        tftp-root={{ supervisor.file_server.tftp_dir }}
+        tftp-root={{ file_server.tftp_dir }}
     - path: /var/scripts/kolla.sh
       content: |
         #!/bin/bash
         
         echo "Kolla is ready..."
       permissions: '0755'
-    - path: {{ supervisor.webhook.dir }}/hooks.json
+    - path: {{ webhook.dir }}/hooks.json
       content: |
         [
           {
             "id": "trigger-kolla-ansible",
             "execute-command": "/var/scripts/kolla.sh",
-            "command-working-directory": "{{ supervisor.webhook.dir }}",
+            "command-working-directory": "{{ webhook.dir }}",
             "trigger-rule":
             {
               "or":
               [
-                {%- for machine in supervisor.machines %}
+                {%- for machine in machines %}
                 { "match": { "type": "ip-whitelist", "ip-range": "{{ machine.bond_address }}/32" } }{% if not loop.last %},{% endif %}
                 {%- endfor %}
               ]
@@ -180,8 +168,8 @@ autoinstall:
         #!/bin/bash
 
         MOUNT_POINT="/cdrom"
-        TFTP_DIR="{{ supervisor.file_server.tftp_dir }}"
-        HTTP_DIR="{{ supervisor.file_server.http_dir }}"
+        TFTP_DIR="{{ file_server.tftp_dir }}"
+        HTTP_DIR="{{ file_server.http_dir }}"
 
         cleanup() {
           umount "$MOUNT_POINT" || true
@@ -206,31 +194,18 @@ autoinstall:
         # webhook
         wget -qO- https://github.com/adnanh/webhook/releases/download/2.8.1/webhook-linux-amd64.tar.gz | tar -zxvf - -C /usr/local/bin/ --strip-components=1 webhook-linux-amd64/webhook
       permissions: '0755'
-    {%- for machine in supervisor.machines %}
-    - path: {{ supervisor.file_server.http_dir }}/{{ machine.pxe_mac_addresses[0] }}/user-data
+    {%- for machine in machines %}
+    - path: {{ file_server.http_dir }}/{{ machine.pxe_mac_addresses[0] }}/user-data
       content: |
-        {{ include_sub_template("templates/cloud-config.yml.j2", machine) | indent(8) }}
-    - path: {{ supervisor.file_server.http_dir }}/{{ machine.pxe_mac_addresses[0] }}/meta-data
+        {{ include_sub_template("templates/cloud-config/node.yml.j2", machine) | indent(8) }}
+    - path: {{ file_server.http_dir }}/{{ machine.pxe_mac_addresses[0] }}/meta-data
     {%- endfor %}
-    {%- endif %}
     
-    {%- if ((supervisor and supervisor.enabled) or (config and config.docker)) %}
     runcmd:
-    {%- if (config and config.docker) %}
-    - install -m 0755 -d /etc/apt/keyrings
-    - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-    - chmod a+r /etc/apt/keyrings/docker.asc
-    - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    - apt-get update
-    - apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    {%- endif %}
-    {%- if (supervisor and supervisor.enabled) %}
     - sh /run/scripts/setup-files.sh
     - systemctl restart dnsmasq.service
-    - python3 -m http.server -d {{ supervisor.file_server.http_dir }}/ {{ supervisor.file_server.port }} &> /var/log/file_server.log &
-    - webhook -hooks {{ supervisor.webhook.dir }}/hooks.json -logfile /var/log/webhook.log -port {{ supervisor.webhook.port }} &
-    {%- endif %}
-    {%- endif %}
+    - python3 -m http.server -d {{ file_server.http_dir }}/ {{ file_server.port }} &> /var/log/file_server.log &
+    - webhook -hooks {{ webhook.dir }}/hooks.json -logfile /var/log/webhook.log -port {{ webhook.port }} &
 
     final_message: |
       ███╗   ███╗███████╗████████╗ █████╗ ██╗     ██████╗ ███████╗████████╗ █████╗  ██████╗██╗  ██╗
