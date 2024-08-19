@@ -23,7 +23,7 @@ webhook:
 
 # Roles assigned to each node as referenced in the `nodes.yaml` file.
 # These roles define the function of each node within the OpenStack cluster.
-nodes_roles:
+kolla_ansible:
   control:
     - cpu012
   network:
