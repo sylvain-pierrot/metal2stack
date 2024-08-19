@@ -1,3 +1,7 @@
+set dotenv-load
+
+ssh_public_key := env_var('SSH_PUBLIC_KEY')
+
 @default:
   just --list
 
@@ -12,15 +16,8 @@ generate-supervisor-cloud-config:
     template = env.get_template(template_file)
     return template.render(values)
 
-  def check_ssh_public_key():
-    ssh_public_key = os.getenv("SSH_PUBLIC_KEY")
-    if not ssh_public_key:
-        print("Error: SSH_PUBLIC_KEY environment variable is not set or is empty.")
-        sys.exit(1)
-
   if __name__ == "__main__":
-    check_ssh_public_key()
-
+    ssh_public_key = "{{ssh_public_key}}"
     template_file = "templates/cloud-config/supervisor.yml.j2"
     supervisor_values_file = "values.d/supervisor.yml"
     nodes_values_file = "values.d/nodes.yml"
@@ -50,15 +47,8 @@ generate-node-cloud-config HOSTNAME:
             return node
     return None
 
-  def check_ssh_public_key():
-    ssh_public_key = os.getenv("SSH_PUBLIC_KEY")
-    if not ssh_public_key:
-        print("Error: SSH_PUBLIC_KEY environment variable is not set or is empty.")
-        sys.exit(1)
-
   if __name__ == "__main__":
-    check_ssh_public_key()
-
+    ssh_public_key = "{{ssh_public_key}}"
     hostname = "{{HOSTNAME}}"
     template_file = "templates/cloud-config/node.yml.j2"
     values_file = "values.d/nodes.yml"

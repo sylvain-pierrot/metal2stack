@@ -4,3 +4,4 @@ venv/
 **/**.iso
 all-in-one
 multinode
+.env
