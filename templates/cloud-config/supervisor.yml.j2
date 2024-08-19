@@ -194,11 +194,11 @@ autoinstall:
         # webhook
         wget -qO- https://github.com/adnanh/webhook/releases/download/2.8.1/webhook-linux-amd64.tar.gz | tar -zxvf - -C /usr/local/bin/ --strip-components=1 webhook-linux-amd64/webhook
       permissions: '0755'
-    {%- for machine in machines %}
-    - path: {{ file_server.http_dir }}/{{ machine.pxe_mac_addresses[0] }}/user-data
+    {%- for node in nodes %}
+    - path: {{ file_server.http_dir }}/{{ node.pxe_mac_addresses[0] }}/user-data
       content: |
-        {{ include_sub_template("templates/cloud-config/node.yml.j2", machine) | indent(8) }}
-    - path: {{ file_server.http_dir }}/{{ machine.pxe_mac_addresses[0] }}/meta-data
+        {{ include_sub_template("templates/cloud-config/node.yml.j2", node) | indent(8) }}
+    - path: {{ file_server.http_dir }}/{{ node.pxe_mac_addresses[0] }}/meta-data
     {%- endfor %}
     
     runcmd:

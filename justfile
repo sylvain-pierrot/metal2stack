@@ -8,23 +8,12 @@ generate-supervisor-cloud-config:
   import yaml
   import os
 
-  def getenv(key):
-    return os.getenv(key)
-
   def include_sub_template(template_file, values, env):
     template = env.get_template(template_file)
     return template.render(values)
-  
-  def load_and_merge_values(file_paths):
-    merged_values = {}
-    for file_path in file_paths:
-      with open(file_path) as file:
-          values = yaml.safe_load(file)
-          merged_values.update(values)
-    return merged_values
 
   def check_ssh_public_key():
-    ssh_public_key = getenv("SSH_PUBLIC_KEY")
+    ssh_public_key = os.getenv("SSH_PUBLIC_KEY")
     if not ssh_public_key:
         print("Error: SSH_PUBLIC_KEY environment variable is not set or is empty.")
         sys.exit(1)
@@ -33,16 +22,19 @@ generate-supervisor-cloud-config:
     check_ssh_public_key()
 
     template_file = "templates/cloud-config/supervisor.yml.j2"
-    values_files = ["values.d/supervisor.yml","values.d/nodes.yml"]
+    supervisor_values_file = "values.d/supervisor.yml"
+    nodes_values_file = "values.d/nodes.yml"
 
-    merge_values = load_and_merge_values(values_files)
+    with open(supervisor_values_file) as f1, open(nodes_values_file) as f2:
+      supervisor = yaml.safe_load(f1)
+      nodes = yaml.safe_load(f2)
         
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="."))
     env.globals['include_sub_template'] = lambda sub_template_file, sub_values: include_sub_template(sub_template_file, sub_values, env)
-    env.globals['getenv'] = lambda key: getenv(key)
+    env.globals['getenv'] = lambda key: os.getenv(key)
 
     template = env.get_template(template_file)
-    print(template.render(merge_values))
+    print(template.render(supervisor,nodes=nodes))
 
 generate-node-cloud-config HOSTNAME:
   #!/usr/bin/python3
@@ -51,18 +43,15 @@ generate-node-cloud-config HOSTNAME:
   import yaml
   import os
   import sys
-
-  def getenv(key):
-    return os.getenv(key)
   
-  def get_machine_by_hostname(hostname, machines):
-    for machine in machines:
-        if machine['hostname'] == hostname:
-            return machine
+  def get_node_by_hostname(hostname, nodes):
+    for node in nodes:
+        if node['hostname'] == hostname:
+            return node
     return None
 
   def check_ssh_public_key():
-    ssh_public_key = getenv("SSH_PUBLIC_KEY")
+    ssh_public_key = os.getenv("SSH_PUBLIC_KEY")
     if not ssh_public_key:
         print("Error: SSH_PUBLIC_KEY environment variable is not set or is empty.")
         sys.exit(1)
@@ -75,19 +64,18 @@ generate-node-cloud-config HOSTNAME:
     values_file = "values.d/nodes.yml"
 
     with open(values_file) as f:
-      data = yaml.safe_load(f)
-      machines = data.get('machines', [])
-      machine = get_machine_by_hostname(hostname, machines)
+      nodes = yaml.safe_load(f)
+      node = get_node_by_hostname(hostname, nodes)
 
-      if machine is None:
+      if node is None:
         print(f"Error: Hostname '{hostname}' not found in machines list.")
         sys.exit(1)
 
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="."))
-    env.globals['getenv'] = lambda key: getenv(key)
+    env.globals['getenv'] = lambda key: os.getenv(key)
 
     template = env.get_template(template_file)
-    print(template.render(machine))
+    print(template.render(node))
 
 check-supervisor-cloud-config:
   just generate-supervisor-cloud-config | cloud-init schema --config-file /dev/stdin
