@@ -2,8 +2,8 @@
 # additional groups are for more control of the environment.
 [control]
 # These hostname must be resolvable from your deployment host
-{%- for control in supervisor.kolla_ansible.control %}
-{{ supervisor.machines | selectattr("hostname", "equalto", control) | map(attribute="bond_address") | first }} ansible_ssh_user=spierrot ansible_become=True ansible_private_key_file=/home/spierrot/.ssh/id_rsa
+{%- for hostname in kolla_ansible.control %}
+{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
 {%- endfor %}
 
 # The above can also be specified as follows:
@@ -12,18 +12,18 @@
 # The network nodes are where your l3-agent and loadbalancers will run
 # This can be the same as a host in the control group
 [network]
-{%- for network in supervisor.kolla_ansible.network %}
-{{ supervisor.machines | selectattr("hostname", "equalto", network) | map(attribute="bond_address") | first }} ansible_ssh_user=spierrot ansible_become=True ansible_private_key_file=/home/spierrot/.ssh/id_rsa
+{%- for hostname in kolla_ansible.network %}
+{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
 {%- endfor %}
 
 [compute]
-{%- for compute in supervisor.kolla_ansible.compute %}
-{{ supervisor.machines | selectattr("hostname", "equalto", compute) | map(attribute="bond_address") | first }} ansible_ssh_user=spierrot ansible_become=True ansible_private_key_file=/home/spierrot/.ssh/id_rsa
+{%- for hostname in kolla_ansible.compute %}
+{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
 {%- endfor %}
 
 [monitoring]
-{%- for monitoring in supervisor.kolla_ansible.monitoring %}
-{{ supervisor.machines | selectattr("hostname", "equalto", monitoring) | map(attribute="bond_address") | first }} ansible_ssh_user=spierrot ansible_become=True ansible_private_key_file=/home/spierrot/.ssh/id_rsa
+{%- for hostname in kolla_ansible.monitoring %}
+{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
 {%- endfor %}
 
 # When compute nodes and control nodes use different interfaces,
@@ -32,8 +32,8 @@
 #compute01 neutron_external_interface=eth0 api_interface=em1 tunnel_interface=em1
 
 [storage]
-{%- for storage in supervisor.kolla_ansible.storage %}
-{{ supervisor.machines | selectattr("hostname", "equalto", storage) | map(attribute="bond_address") | first }} ansible_ssh_user=spierrot ansible_become=True ansible_private_key_file=/home/spierrot/.ssh/id_rsa
+{%- for hostname in kolla_ansible.storage %}
+{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
 {%- endfor %}
 
 [deployment]
