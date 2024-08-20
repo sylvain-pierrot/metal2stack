@@ -145,31 +145,50 @@ autoinstall:
         
         echo "Kolla is ready..."
       permissions: '0755'
-    - path: {{ webhook.dir }}/hooks.json
+    - path: /etc/systemd/system/http-server.service
       content: |
-        [
-          {
-            "id": "trigger-kolla-ansible",
-            "execute-command": "/var/scripts/kolla.sh",
-            "command-working-directory": "{{ webhook.dir }}",
-            "trigger-rule":
-            {
-              "or":
-              [
-                {%- for machine in machines %}
-                { "match": { "type": "ip-whitelist", "ip-range": "{{ machine.bond_address }}/32" } }{% if not loop.last %},{% endif %}
-                {%- endfor %}
-              ]
-            }
-          }
-        ]
-    - path: /run/scripts/setup-files.sh
+        [Unit]
+        Description=HTTP File Server
+        Documentation=man:SimpleHTTPServer(1)
+
+        [Service]
+        Type=simple
+        WorkingDirectory={{ file_server.http_dir }}
+        ExecStart=/usr/bin/python3 -m http.server {{ file_server.port }}
+
+        [Install]
+        WantedBy=multi-user.target
+    - path: /etc/systemd/system/metal2stack-state-sync.service
+      content: |
+        [Unit]
+        Description=Sync state from the source of truth (Git repositories)
+        After=network.target
+
+        [Service]
+        Type=oneshot
+        ExecStartPre=-/usr/bin/mkdir -p /etc/metal2stack
+        ExecStart=/bin/bash -c "curl -s -H 'Accept: application/vnd.github.v3.raw' https://api.github.com/repos/sylvain-pierrot/metal2stack/contents/values.d | awk -F'\"' '/\"download_url\":/ {print $4}' | xargs -I{} sh -c 'curl -L {} -o /etc/metal2stack/$(basename {})'"
+
+        [Install]
+        WantedBy=multi-user.target
+    - path: /etc/systemd/system/metal2stack-state-sync.timer
+      content: |
+        [Unit]
+        Description=Run metal2stack-state-sync.service every 3 minutes
+
+        [Timer]
+        OnUnitActiveSec=3min
+        Persistent=true
+
+        [Install]
+        WantedBy=timers.target
+    - path: /run/scripts/pre-configure-supervisor.sh
       content: |
         #!/bin/bash
 
-        MOUNT_POINT="/cdrom"
-        TFTP_DIR="{{ file_server.tftp_dir }}"
         HTTP_DIR="{{ file_server.http_dir }}"
+        TFTP_DIR="{{ file_server.tftp_dir }}"
+        MOUNT_POINT="/cdrom"
 
         cleanup() {
           umount "$MOUNT_POINT" || true
@@ -179,20 +198,15 @@ autoinstall:
         cd /tmp
         mkdir -p $TFTP_DIR
 
-        # tftp server
         apt-get -y download shim.signed grub-efi-amd64-signed grub-common
         dpkg-deb --fsys-tarfile shim-signed*deb | tar x ./usr/lib/shim/shimx64.efi.signed.latest -O > $TFTP_DIR/bootx64.efi
         dpkg-deb --fsys-tarfile grub-efi-amd64-signed*deb | tar x ./usr/lib/grub/x86_64-efi-signed/grubnetx64.efi.signed -O > $TFTP_DIR/grubx64.efi
         dpkg-deb --fsys-tarfile grub-common*deb | tar x ./usr/share/grub/unicode.pf2 -O > $TFTP_DIR/unicode.pf2
 
-        # http server
         wget -c -P $HTTP_DIR/ https://releases.ubuntu.com/jammy/ubuntu-22.04.4-live-server-amd64.iso
         mount -o loop $HTTP_DIR/ubuntu-22.04.4-live-server-amd64.iso $MOUNT_POINT
         cp -rvf $MOUNT_POINT/casper/initrd $TFTP_DIR
         cp -rvf $MOUNT_POINT/casper/vmlinuz $TFTP_DIR
-
-        # webhook
-        wget -qO- https://github.com/adnanh/webhook/releases/download/2.8.1/webhook-linux-amd64.tar.gz | tar -zxvf - -C /usr/local/bin/ --strip-components=1 webhook-linux-amd64/webhook
       permissions: '0755'
     {%- for node in nodes %}
     - path: {{ file_server.http_dir }}/{{ node.pxe_mac_addresses[0] }}/user-data
@@ -202,10 +216,11 @@ autoinstall:
     {%- endfor %}
     
     runcmd:
-    - sh /run/scripts/setup-files.sh
+    - sh /run/scripts/pre-configure-supervisor.sh
+    - systemctl daemon-reload
+    - systemctl enable --now http-server.service
     - systemctl restart dnsmasq.service
-    - python3 -m http.server -d {{ file_server.http_dir }}/ {{ file_server.port }} &> /var/log/file_server.log &
-    - webhook -hooks {{ webhook.dir }}/hooks.json -logfile /var/log/webhook.log -port {{ webhook.port }} &
+    - systemctl enable --now metal2stack-state-sync.timer
 
     final_message: |
       ███╗   ███╗███████╗████████╗ █████╗ ██╗     ██████╗ ███████╗████████╗ █████╗  ██████╗██╗  ██╗
