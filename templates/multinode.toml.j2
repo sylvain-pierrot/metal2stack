@@ -3,7 +3,8 @@
 [control]
 # These hostname must be resolvable from your deployment host
 {%- for hostname in kolla_ansible.control %}
-{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
+{%- set node = nodes | selectattr("hostname", "equalto", hostname) | first %}
+{{ hostname }} ansible_host={{ node.bond_address }} ansible_ssh_user={{ node.user }} ansible_become=True ansible_private_key_file=/home/{{ node.user }}/.ssh/id_rsa
 {%- endfor %}
 
 # The above can also be specified as follows:
@@ -13,17 +14,20 @@
 # This can be the same as a host in the control group
 [network]
 {%- for hostname in kolla_ansible.network %}
-{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
+{%- set node = nodes | selectattr("hostname", "equalto", hostname) | first %}
+{{ hostname }} ansible_host={{ node.bond_address }} ansible_ssh_user={{ node.user }} ansible_become=True ansible_private_key_file=/home/{{ node.user }}/.ssh/id_rsa
 {%- endfor %}
 
 [compute]
 {%- for hostname in kolla_ansible.compute %}
-{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
+{%- set node = nodes | selectattr("hostname", "equalto", hostname) | first %}
+{{ hostname }} ansible_host={{ node.bond_address }} ansible_ssh_user={{ node.user }} ansible_become=True ansible_private_key_file=/home/{{ node.user }}/.ssh/id_rsa
 {%- endfor %}
 
 [monitoring]
 {%- for hostname in kolla_ansible.monitoring %}
-{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
+{%- set node = nodes | selectattr("hostname", "equalto", hostname) | first %}
+{{ hostname }} ansible_host={{ node.bond_address }} ansible_ssh_user={{ node.user }} ansible_become=True ansible_private_key_file=/home/{{ node.user }}/.ssh/id_rsa
 {%- endfor %}
 
 # When compute nodes and control nodes use different interfaces,
@@ -33,7 +37,8 @@
 
 [storage]
 {%- for hostname in kolla_ansible.storage %}
-{{ nodes | selectattr("hostname", "equalto", hostname) | map(attribute="bond_address") | first }} ansible_ssh_user=metal2stack ansible_become=True ansible_private_key_file=/home/metal2stack/.ssh/id_rsa
+{%- set node = nodes | selectattr("hostname", "equalto", hostname) | first %}
+{{ hostname }} ansible_host={{ node.bond_address }} ansible_ssh_user={{ node.user }} ansible_become=True ansible_private_key_file=/home/{{ node.user }}/.ssh/id_rsa
 {%- endfor %}
 
 [deployment]

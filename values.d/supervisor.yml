@@ -28,10 +28,10 @@ kolla_ansible:
   control:
     - cpu012
   network:
-    - cpu013
+    - cpu012
   compute:
     - gpu003
   monitoring:
-    - cpu013
+    - cpu012
   storage:
     - cpu013

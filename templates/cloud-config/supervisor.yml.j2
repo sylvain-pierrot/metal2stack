@@ -81,7 +81,7 @@ autoinstall:
     users:
       - name: {{ user }}
         sudo: ALL=(ALL) NOPASSWD:ALL
-        groups: users,admin
+        groups: users,admin,docker
         lock_passwd: false
         ssh_authorized_keys:
           - "{{ getenv("SSH_PUBLIC_KEY") }}"
