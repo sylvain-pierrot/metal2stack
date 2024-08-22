@@ -1,15 +1,12 @@
-- hostname: cpu012
-  bond_address: 10.253.1.10
-  pxe_mac_addresses:
-    - d4:f5:ef:50:96:f2
-    - d4:f5:ef:50:96:f3
-- hostname: cpu013
-  bond_address: 10.253.1.11
-  pxe_mac_addresses:
-    - d4:f5:ef:50:99:12
-    - d4:f5:ef:50:99:13
-- hostname: gpu003
-  bond_address: 10.253.1.12
-  pxe_mac_addresses:
-    - d4:f5:ef:50:cc:ba
-    - d4:f5:ef:50:cc:bb
+- bond_address: 10.253.1.10
+  hostname: cpu012
+  pxe_mac_address: d4:f5:ef:50:96:f3
+  user: spierrot
+- bond_address: 10.253.1.11
+  hostname: cpu013
+  pxe_mac_address: d4:f5:ef:50:99:13
+  user: spierrot
+- bond_address: 10.253.1.12
+  hostname: gpu003
+  pxe_mac_address: d4:f5:ef:50:cc:bb
+  user: spierrot

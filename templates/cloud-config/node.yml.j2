@@ -65,7 +65,7 @@ autoinstall:
     # when a 'default' entry is found it will reference the 'default_user'
     # from the distro configuration specified below
     users:
-      - name: metal2stack
+      - name: {{ user }}
         sudo: ALL=(ALL) NOPASSWD:ALL
         groups: users,admin
         lock_passwd: false

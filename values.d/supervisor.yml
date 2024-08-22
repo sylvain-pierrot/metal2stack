@@ -1,4 +1,5 @@
 hostname: cpu011
+user: spierrot
 addresses:
   pxe: 10.253.24.4
   bond: 10.253.1.9
